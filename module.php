@@ -60,6 +60,10 @@
 		 */
 		public function install(string $hostname, string $path = '', array $opts = array()): bool
 		{
+			if (!IS_CLI) {
+				return $this->query('laravel_install', $hostname, $path, $opts);
+			}
+
 			if (!$this->mysql_enabled()) {
 				return error('%(what)s must be enabled to install %(app)s',
 					['what' => 'MySQL', 'app' => static::APP_NAME]);
@@ -89,6 +93,7 @@
 			$args['version'] = $opts['version'];
 
 			$lock = $this->parseLock($opts['verlock'], $opts['version']);
+
 			$ret = $this->execComposer($docroot,
 				'create-project --prefer-dist %(package)s %(docroot)s \'%(version)s\'',
 				[
