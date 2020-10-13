@@ -380,7 +380,7 @@
 			if (!$docroot) {
 				return error('failed to determine Laravel');
 			}
-			if (!file_exists($this->domain_fs_path($docroot . '/bootstrap/cache/config.php'))) {
+			if (!$this->php_jailed() && !file_exists($this->domain_fs_path($docroot . '/bootstrap/cache/config.php'))) {
 				// prime it
 				warn('Cache not found, priming with request');
 				try {
