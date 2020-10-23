@@ -424,19 +424,19 @@
 				return error('update failed');
 			}
 			$approot = $this->getAppRoot($hostname, $path);
-			$newversion = $this->get_version($hostname, $path) ?? $version;
+			$oldversion = $this->get_version($hostname, $path) ?? $version;
 			$cmd = 'update laravel/framework' . ($version ? ':' . $version : '');
 			$ret = $this->execComposer($approot, $cmd);
 			$error = [$ret['stderr']];
-			if ($newversion !== $version && $ret['success']) {
+			if ($version && $oldversion !== $version && $ret['success']) {
 				$ret['success'] = false;
 				$error = [
 					"Failed to update Laravel from `%s' to `%s', check composer.json for version restrictions",
-					$newversion, $version
+					$oldversion, $version
 				];
 			}
 			parent::setInfo($docroot, [
-				'version' => $newversion,
+				'version' => $oldversion,
 				'failed'  => !$ret['success']
 			]);
 
