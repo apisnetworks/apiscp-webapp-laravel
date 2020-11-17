@@ -376,17 +376,21 @@
 		public function db_config(string $hostname, string $path = '')
 		{
 			$this->web_purge();
-			$docroot = $this->getAppRoot($hostname, $path);
-			if (!$docroot) {
+			$approot = $this->getAppRoot($hostname, $path);
+			if (!$approot) {
 				return error('failed to determine Laravel');
 			}
-			if (!$this->php_jailed() && !file_exists($this->domain_fs_path($docroot . '/bootstrap/cache/config.php'))) {
-				// prime it
-				warn('Cache not found, priming with request');
-				try {
-					(new \HTTP\SelfReferential($hostname, $this->site_ip_address()))->get($path);
-				} catch (\GuzzleHttp\Exception\RequestException $e) {
-					return error('Self-referential request failed: %s', $e->getMessage());
+			if (!$this->file_exists($approot . '/bootstrap/cache/config.php')) {
+				if ($this->php_jailed()) {
+					// prime it
+					warn('Cache not found, priming with request');
+					try {
+						(new \HTTP\SelfReferential($hostname, $this->site_ip_address()))->get($path);
+					} catch (\GuzzleHttp\Exception\RequestException $e) {
+						return error('Self-referential request failed: %s', $e->getMessage());
+					}
+				} else {
+					$this->buildConfig($approot, $this->getDocumentRoot($hostname, $path));
 				}
 			}
 
@@ -394,10 +398,10 @@
 				'print serialize(array("user" => $db["username"], "password" => $db["password"], "db" => $db["database"], ' .
 				'"host" => $db["host"], "prefix" => $db["prefix"]));';
 			$cmd = 'cd %(path)s && php -d mysqli.default_socket=' . escapeshellarg(ini_get('mysqli.default_socket')) . ' -r %(code)s';
-			$ret = $this->pman_run($cmd, array('path' => $docroot, 'code' => $code));
+			$ret = $this->pman_run($cmd, array('path' => $approot, 'code' => $code));
 
 			if (!$ret['success']) {
-				return error("failed to obtain Laravel configuration for `%s'", $docroot);
+				return error("failed to obtain Laravel configuration for `%s'", $approot);
 			}
 			$data = \Util_PHP::unserialize($ret['stdout']);
 
