@@ -146,7 +146,9 @@
 			} catch (\apnscpException $e) {
 				$this->remapPublic($hostname, $path, '');
 				$this->file_delete($approot, true);
-				$db->rollback();
+				if (isset($db)) {
+					$db->rollback();
+				}
 				return error('Failed to install Laravel: %s', $e->getMessage());
 			} finally {
 				\Error_Reporter::exception_upgrade($oldex);
