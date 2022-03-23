@@ -199,6 +199,8 @@
 				$cap = '5.4';
 			} else if (version_compare($phpversion, '7.1.3', '<')) {
 				$cap = '5.5';
+			} else if (version_compare($phpversion, '8.0', '<')) {
+				$cap = '8';
 			}
 
 			if ($cap && version_compare($options['version'], $cap, '>=')) {
