@@ -190,7 +190,7 @@
 			if (!parent::checkVersion($options)) {
 				return false;
 			}
-			$phpversion = $this->php_version();
+			$phpversion = $this->php_pool_get_version();
 
 			$cap = null;
 			if (version_compare($phpversion, '5.6.4', '<')) {
