@@ -301,6 +301,18 @@
 				warn("failed to cache configuration directly, visit `%s' to cache configuration", $uri);
 		}
 
+		protected function lumenSubtype(string $appRoot): bool
+		{
+			$file = $appRoot . '/composer.lock';
+			if (!$this->file_exists($file)) {
+				return false;
+			}
+
+			$content = (string)$this->file_get_file_contents($file);
+
+			return false !== strpos($content, "laravel/lumen-framework");
+		}
+
 		/**
 		 * Get installed version
 		 *
@@ -312,9 +324,18 @@
 		{
 			// laravel/laravel installs laravel/illuminate, which breaks the composer helper
 			$approot = $this->getAppRoot($hostname, $path);
+
 			if (!$this->valid($hostname, $path)) {
 				return null;
 			}
+
+			if ($this->lumenSubtype($approot)) {
+				$meta = array_first($this->readComposer($approot)['packages'], function ($package) {
+					return $package['name'] === 'laravel/lumen-framework';
+				});
+				return $meta ? substr($meta['version'], 1) : null;
+			}
+
 			$ret = $this->execPhp($approot, './artisan --version');
 			if (!$ret['success']) {
 				return null;
@@ -385,6 +406,18 @@
 				return error('failed to determine Laravel');
 			}
 			if (!$this->file_exists($approot . '/bootstrap/cache/config.php')) {
+				if ($this->lumenSubtype($approot) && $this->file_file_exists($approot . '/.env')) {
+
+					$ini = parse_ini_string($this->file_get_file_contents($approot . '/.env'));
+					return [
+						'host'     => $ini['DB_HOST'] ?? 'localhost',
+						'prefix'   => $ini['DB_PREFIX'] ?? '',
+						'user'     => $ini['DB_USERNAME'] ?? $this->username,
+						'password' => $ini['DB_PASSWORD'] ?? '',
+						'db'       => $ini['DB_DATABASE'] ?? null,
+						'type'     => $ini['DB_CONNECTION'] ?? 'mysql'
+					];
+				}
 				if ($this->php_jailed()) {
 					// prime it
 					warn('Cache not found, priming with request');
@@ -400,7 +433,7 @@
 
 			$code = '$cfg = (include("./bootstrap/cache/config.php"))["database"]; $db=$cfg["connections"][$cfg["default"]]; ' .
 				'print serialize(array("user" => $db["username"], "password" => $db["password"], "db" => $db["database"], ' .
-				'"host" => $db["host"], "prefix" => $db["prefix"]));';
+				'"host" => $db["host"], "prefix" => $db["prefix"], "type" => $db["driver"]));';
 			$cmd = 'cd %(path)s && php -d mysqli.default_socket=' . escapeshellarg(ini_get('mysqli.default_socket')) . ' -r %(code)s';
 			$ret = $this->pman_run($cmd, array('path' => $approot, 'code' => $code));
 
@@ -433,7 +466,8 @@
 			}
 			$approot = $this->getAppRoot($hostname, $path);
 			$oldversion = $this->get_version($hostname, $path) ?? $version;
-			$cmd = 'update laravel/framework' . ($version ? ':' . $version : '');
+			$pkg = $this->lumenSubtype($approot) ? 'laravel/lumen-framework' : 'laravel/framework';
+			$cmd = 'update ' . $pkg . ($version ? ':' . $version : '');
 			$ret = $this->execComposer($approot, $cmd);
 			$error = [$ret['stderr']];
 			if ($version && $oldversion !== $version && $ret['success']) {
