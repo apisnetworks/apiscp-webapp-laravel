@@ -255,7 +255,7 @@
 
 		private function setConfiguration(string $approot, string $docroot, array $config)
 		{
-			$envcfg = (new \Opcenter\Provisioning\ConfigurationWriter('webapps.laravel.env',
+			$envcfg = (new \Opcenter\Provisioning\ConfigurationWriter('@webapp(laravel)::templates.env',
 				\Opcenter\SiteConfiguration::shallow($this->getAuthContext())))
 				->compile($config);
 			$this->file_put_file_contents("${approot}/.env", (string)$envcfg);
