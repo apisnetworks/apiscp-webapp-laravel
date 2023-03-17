@@ -158,8 +158,8 @@
 			$commands = [
 				'key:generate',
 				'migrate',
-				\Opcenter\Versioning::compare($args['verison'], '10', '<') ? 'queue:seed' : null,
-				\Opcenter\Versioning::compare($args['verison'], '9', '>=') ? 'vendor:publish --tag=laravel-assets --no-ansi' : null,
+				\Opcenter\Versioning::compare($args['version'], '10', '<') ? 'queue:seed' : null,
+				\Opcenter\Versioning::compare($args['version'], '9', '>=') ? 'vendor:publish --tag=laravel-assets --no-ansi' : null,
 			];
 			foreach ($commands as $cmd) {
 				if (!$cmd) {
