@@ -11,9 +11,7 @@
 	 *  +------------------------------------------------------------+
 	 */
 
-	use Lararia\Bootstrapper;
 	use Module\Support\Webapps\Composer;
-	use Module\Support\Webapps\Mailer;
 	use Module\Support\Webapps\Traits\PublicRelocatable;
 
 	/**
@@ -392,7 +390,7 @@
 		 */
 		public function get_installable_versions(): array
 		{
-			return parent::get_versions();
+			return parent::getPackagistVersions('laravel/laravel');
 		}
 
 		/**
@@ -422,7 +420,7 @@
 						'type'     => $ini['DB_CONNECTION'] ?? 'mysql'
 					];
 				}
-				if ($this->php_jailed()) {
+				if (!$this->php_jailed()) {
 					// prime it
 					warn('Cache not found, priming with request');
 					try {
