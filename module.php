@@ -12,6 +12,7 @@
 	 */
 
 	use Module\Support\Webapps\Composer;
+	use Module\Support\Webapps\ComposerWrapper;
 	use Module\Support\Webapps\Traits\PublicRelocatable;
 
 	/**
@@ -390,7 +391,7 @@
 		 */
 		public function get_installable_versions(): array
 		{
-			return parent::getPackagistVersions('laravel/laravel');
+			return parent::getPackagistVersions(static::PACKAGIST_NAME);
 		}
 
 		/**
@@ -485,5 +486,19 @@
 			]);
 
 			return $ret['success'] ?: error(...$error);
+		}
+
+		protected function execComposer(string $path = null, string $cmd, array $args = array()): array
+		{
+			return ComposerWrapper::instantiateContexted(
+				$this->getAuthContextFromDocroot($path ?? \Web_Module::MAIN_DOC_ROOT)
+			)->exec($path, $cmd, $args);
+		}
+
+		protected function execPhp(string $path, string $cmd, array $args = [], array $env = []): array
+		{
+			return ComposerWrapper::instantiateContexted(
+				$this->getAuthContextFromDocroot($path ?? \Web_Module::MAIN_DOC_ROOT)
+			)->direct($path, $cmd, $args, $env);
 		}
 	}
