@@ -14,13 +14,9 @@
 	namespace Module\Support\Webapps\App\Type\Laravel;
 
 	use Module\Support\Webapps\App\Type\Unknown\Handler as Unknown;
-	use Module\Support\Webapps\Traits\PublicRelocatable;
 
 	class Handler extends Unknown
 	{
-		use PublicRelocatable {
-			getAppRoot as getAppRootReal;
-		}
 		const NAME = 'Laravel';
 		const ADMIN_PATH = null;
 		const LINK = 'https://laravel.com';
@@ -28,15 +24,11 @@
 		const DEFAULT_FORTIFICATION = 'max';
 		const FEAT_ALLOW_SSL = true;
 		const FEAT_RECOVERY = false;
+		const APP_ROOT_DEPTH = 1;
 
 		public function display(): bool
 		{
 			return version_compare($this->php_version(), '7', '>=');
-		}
-
-		public function getAppRoot(): ?string
-		{
-			return $this->getAppRootReal($this->getHostname(), $this->getPath());
 		}
 
 		public function getVersions(): array
@@ -48,6 +40,4 @@
 		{
 			return $this->laravel_get_installable_versions();
 		}
-
-
 	}

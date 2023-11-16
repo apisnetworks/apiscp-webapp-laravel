@@ -118,6 +118,7 @@
 
 			$oldex = \Error_Reporter::exception_upgrade();
 			$approot = $this->getAppRoot($hostname, $path);
+
 			try {
 				$this->execComposer($approot, 'config name %(hostname)s/laravel', ['hostname' => $hostname]);
 				$docroot = $this->getDocumentRoot($hostname, $path);
