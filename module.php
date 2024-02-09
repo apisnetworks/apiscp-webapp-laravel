@@ -120,7 +120,9 @@
 			$approot = $this->getAppRoot($hostname, $path);
 
 			try {
-				$this->execComposer($approot, 'config name %(hostname)s/laravel', ['hostname' => $hostname]);
+				// handle the xn-- in punycode domains
+				$composerHostname = preg_replace("/-{2,}/", '-', $hostname);
+				$this->execComposer($approot, 'config name %(hostname)s/laravel', ['hostname' => $composerHostname]);
 				$docroot = $this->getDocumentRoot($hostname, $path);
 
 				// ensure it's reachable
