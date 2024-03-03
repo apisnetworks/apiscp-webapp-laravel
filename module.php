@@ -12,6 +12,7 @@
 	 */
 
 	use Module\Support\Webapps\Composer;
+	use Module\Support\Webapps\ComposerMetadata;
 	use Module\Support\Webapps\ComposerWrapper;
 	use Module\Support\Webapps\Traits\PublicRelocatable;
 
@@ -24,14 +25,11 @@
 	 */
 	class Laravel_Module extends Composer
 	{
-		use PublicRelocatable {
-			getAppRoot as getAppRootReal;
-		}
+		use PublicRelocatable;
 		const APP_NAME = 'Laravel';
 		const PACKAGIST_NAME = 'laravel/laravel';
-
-		// every Laravel app should contain artisan one level down...
-		const LARAVEL_CLI = 'artisan';
+		const BINARY_NAME = 'artisan';
+		const VALIDITY_FILE = self::BINARY_NAME;
 		const DEFAULT_VERSION_LOCK = 'minor';
 
 		protected $aclList = array(
@@ -59,16 +57,14 @@
 		 */
 		public function install(string $hostname, string $path = '', array $opts = array()): bool
 		{
-			if (!IS_CLI) {
-				return $this->query('laravel_install', $hostname, $path, $opts);
-			}
-
 			if (!$this->mysql_enabled()) {
 				return error('%(what)s must be enabled to install %(app)s',
 					['what' => 'MySQL', 'app' => static::APP_NAME]);
 			}
 			if (!version_compare($this->php_version(), '7', '>=')) {
-				return error('Laravel requires PHP7');
+				return error('%(name)s requires %(what)s', [
+					'name' => static::APP_NAME, 'what' => 'PHP7'
+				]);
 			}
 
 			if (!$this->php_composer_exists()) {
@@ -91,29 +87,19 @@
 
 			$args['version'] = $opts['version'];
 
-			$lock = $this->parseLock($opts['verlock'], $opts['version']);
+			if (!$this->createProject($docroot, static::PACKAGIST_NAME, $opts['version'])) {
+				if (empty($opts['keep'])) {
+					$this->file_delete($docroot, true);
+				}
 
-			$ret = $this->execComposer($docroot,
-				'create-project --prefer-dist %(package)s %(docroot)s \'%(version)s\'',
-				[
-					'package' => static::PACKAGIST_NAME,
-					'docroot' => $docroot,
-					'version' => $lock
-				]
-			);
-			if (!$ret['success']) {
-				$this->file_delete($docroot, true);
-
-				return error('failed to download laravel/laravel package: %s %s',
-					$ret['stderr'], $ret['stdout']
-				);
+				return false;
 			}
 
 			if (null === ($docroot = $this->remapPublic($hostname, $path))) {
 				$this->file_delete($this->getDocumentRoot($hostname, $path), true);
 
-				return error("Failed to remap Laravel to public/, manually remap from `%s' - Laravel setup is incomplete!",
-					$docroot);
+				return error("Failed to remap %(name)s to public/, manually remap from `%(path)s' - %(name)s setup is incomplete!",
+					['name' => static::APP_NAME, 'path' => $docroot]);
 			}
 
 			$oldex = \Error_Reporter::exception_upgrade();
@@ -122,11 +108,17 @@
 			try {
 				// handle the xn-- in punycode domains
 				$composerHostname = preg_replace("/-{2,}/", '-', $hostname);
-				$this->execComposer($approot, 'config name %(hostname)s/laravel', ['hostname' => $composerHostname]);
+				$this->execComposer($approot, 'config name %(hostname)s/%(app)s', [
+					'app' => strtolower(static::APP_NAME),
+					'hostname' => $composerHostname
+				]);
 				$docroot = $this->getDocumentRoot($hostname, $path);
 
 				// ensure it's reachable
-				$this->_fixCache($approot);
+				if (self::class === static::class) {
+					// Laravel
+					$this->_fixCache($approot);
+				}
 
 				$db = \Module\Support\Webapps\DatabaseGenerator::mysql($this->getAuthContext(), $hostname);
 				if (!$db->create()) {
@@ -141,44 +133,37 @@
 					'dbname'     => $db->database,
 					'dbuser'     => $db->username,
 					'dbpassword' => $db->password,
-					'dbhost'     => $db->hostname
+					'dbhost'     => $db->hostname,
+					'dbprefix'   => $db->prefix,
+					'email'      => $opts['email'],
+					'user'       => $opts['user'],
+					'login'      => $opts['login'] ?? $opts['user'],
+					'password'   => $opts['password'] ?? ''
 				], $args))) {
-					return error('failed to set .env configuration');
+					return error('failed to set database configuration');
 				}
+
 			} catch (\apnscpException $e) {
-				$this->remapPublic($hostname, $path, '');
-				$this->file_delete($approot, true);
-				if (isset($db)) {
-					$db->rollback();
+				if (empty($opts['keep'])) {
+					$this->remapPublic($hostname, $path, '');
+					$this->file_delete($approot, true);
+					if (isset($db)) {
+						$db->rollback();
+					}
 				}
-				return error('Failed to install Laravel: %s', $e->getMessage());
+				return error('Failed to install %(name)s: %(err)s', [
+					'name' => static::APP_NAME, 'err' => $e->getMessage()
+				]);
 			} finally {
 				\Error_Reporter::exception_upgrade($oldex);
 			}
 
-
-			$commands = [
-				'key:generate',
-				'migrate',
-				\Opcenter\Versioning::compare($args['version'], '10', '<') ? 'queue:seed' : null,
-				\Opcenter\Versioning::compare($args['version'], '9', '>=') ? 'vendor:publish --tag=laravel-assets --no-ansi' : null,
-			];
-			foreach ($commands as $cmd) {
-				if (!$cmd) {
-					continue;
-				}
-				$this->execPhp($approot, './artisan ' . $cmd);
-			}
+			$this->postInstall($hostname, $path);
 
 			$this->initializeMeta($docroot, $opts);
-			$this->fortify($hostname, $path, 'max');
-
+			$this->fortify($hostname, $path, $this->handlerFromApplication($this->getAppName())::DEFAULT_FORTIFICATION);
 			$this->fixRewriteBase($docroot);
-			if (!$this->file_exists($approot . '/public/storage')) {
-				$this->file_symlink($approot . '/storage/app/public', $approot . '/public/storage');
-				$this->file_chown_symlink($approot . '/public/storage', $this->file_stat($approot . '/storage/app/public')['owner']);
-			}
-			$email = $opts['email'] ?? $this->common_get_email();
+
 			$this->buildConfig($approot, $docroot);
 
 			$this->notifyInstalled($hostname, $path, $opts);
@@ -187,8 +172,71 @@
 				['app' => static::APP_NAME, 'email' => $opts['email']]);
 		}
 
+		protected function createProject(string $docroot, string $package, string $version, array $opts = []): bool
+		{
+			// Laravel bootstraps itself with laravel/laravel (laravel/framework main versioning)
+			// Flarum with flarum/flarum (flarum/core main versioning)
+			// Make a risky assumption the installation will always reflect the framework version
+			foreach ($this->getPackagistVersions(static::PACKAGIST_NAME) as $branchVer) {
+				if (version_compare($branchVer, \Opcenter\Versioning::asMinor($version), '>=')) {
+					break;
+				}
+			}
+			$opts = \Opcenter\CliParser::buildFlags($opts + ['prefer-dist' => true, 'no-install' => true, 'no-scripts' => true]);
+			$ret = $this->execComposer($docroot,
+				'create-project ' . $opts . ' %(package)s %(docroot)s \'%(version)s\'',
+				[
+					'package' => $package,
+					'docroot' => $docroot,
+					'version' => $branchVer
+				]
+			);
+			$metadata = ComposerMetadata::read($ctx = $this->getAuthContextFromDocroot($docroot), $docroot);
+			array_set($metadata, 'require.' . $this->updateLibraryName($docroot), $version);
+			$metadata->sync();
+			$ret = \Module\Support\Webapps\ComposerWrapper::instantiateContexted($ctx)->exec($docroot,
+				'update -W');
+
+			return $ret['success'] ?:
+				error('failed to download %(name)s package: %(stderr)s %(stdout)s', [
+					'name' => static::APP_NAME, 'stderr' => $ret['stderr'], 'stdout' => $ret['stdout']
+				]
+			);
+		}
+
+		protected function postInstall(string $hostname, string $path): bool
+		{
+			$approot = $this->getAppRoot($hostname, $path);
+			$version = $this->get_version($hostname, $path);
+			$commands = [
+				'key:generate',
+				'migrate',
+				\Opcenter\Versioning::compare($version, '10', '<') ? 'queue:seed' : null,
+				\Opcenter\Versioning::compare($version, '9',
+					'>=') ? 'vendor:publish --tag=laravel-assets --no-ansi' : null,
+			];
+			foreach ($commands as $cmd) {
+				if (!$cmd) {
+					continue;
+				}
+				$this->execPhp($approot, './' . static::BINARY_NAME . ' ' . $cmd);
+			}
+
+			if (!$this->file_exists($approot . '/public/storage')) {
+				$this->file_symlink($approot . '/storage/app/public', $approot . '/public/storage');
+				$this->file_chown_symlink($approot . '/public/storage',
+					$this->file_stat($approot . '/storage/app/public')['owner']);
+			}
+
+			return true;
+		}
+
 		protected function checkVersion(array &$options): bool
 		{
+			if (self::class !== static::class) {
+				return parent::checkVersion($options);
+			}
+
 			if (!isset($options['version'])) {
 				$versions = $this->get_installable_versions();
 				$options['version'] = array_pop($versions);
@@ -210,16 +258,13 @@
 			}
 
 			if ($cap && version_compare($options['version'], $cap, '>=')) {
-				info("PHP version `%s' detected, capping Laravel to %s", $phpversion, $cap);
+				info("PHP version `%(phpversion)s' detected, capping %(name)s to %(cap)s", [
+					'phpversion' => $phpversion, 'name' => static::APP_NAME, 'cap' => $cap
+				]);
 				$options['version'] = $cap;
 			}
 
 			return true;
-		}
-
-		protected function getAppRoot(string $hostname, string $path = ''): ?string
-		{
-			return $this->getAppRootReal($hostname, $path);
 		}
 
 		/**
@@ -259,9 +304,9 @@
 			return $ret['success'];
 		}
 
-		private function setConfiguration(string $approot, string $docroot, array $config)
+		protected function setConfiguration(string $approot, string $docroot, array $config)
 		{
-			$envcfg = (new \Opcenter\Provisioning\ConfigurationWriter('@webapp(laravel)::templates.env',
+			$envcfg = (new \Opcenter\Provisioning\ConfigurationWriter('@webapp(' . $this->getAppName() . ')::templates.env',
 				\Opcenter\SiteConfiguration::shallow($this->getAuthContext())))
 				->compile($config);
 			$this->file_put_file_contents("${approot}/.env", (string)$envcfg);
@@ -278,7 +323,11 @@
 		 */
 		private function buildConfig(string $approot, string $docroot): bool
 		{
-			$ret = $this->execPhp($approot, 'artisan config:cache');
+			if (static::class !== self::class) {
+				return true;
+			}
+
+			$ret = $this->execPhp($approot, static::BINARY_NAME . ' config:cache');
 			if (!$ret['success']) {
 				return error('config rebuild failed: %s', coalesce($ret['stderr'], $ret['stdout']));
 			}
@@ -336,13 +385,13 @@
 			}
 
 			if ($this->lumenSubtype($approot)) {
-				$meta = array_first($this->readComposer($approot)['packages'], function ($package) {
+				$meta = array_first(ComposerMetadata::readFrozen($this->getAuthContextFromDocroot($approot))->packages(), function ($package) {
 					return $package['name'] === 'laravel/lumen-framework';
 				});
 				return $meta ? substr($meta['version'], 1) : null;
 			}
 
-			$ret = $this->execPhp($approot, './artisan --version');
+			$ret = $this->execPhp($approot, './' . static::BINARY_NAME . ' --version');
 			if (!$ret['success']) {
 				return null;
 			}
@@ -372,7 +421,7 @@
 				$approot = $this->domain_fs_path($approot);
 			}
 
-			return file_exists($approot . '/artisan');
+			return file_exists($approot . '/' . static::BINARY_NAME);
 		}
 
 		/**
@@ -409,7 +458,7 @@
 			$this->web_purge();
 			$approot = $this->getAppRoot($hostname, $path);
 			if (!$approot) {
-				return error('failed to determine Laravel');
+				return error('failed to determine %(app)s', ['app' => $this->getAppName()]);
 			}
 			if (!$this->file_exists($approot . '/bootstrap/cache/config.php')) {
 				if ($this->lumenSubtype($approot) && $this->file_file_exists($approot . '/.env')) {
@@ -467,28 +516,65 @@
 		public function update(string $hostname, string $path = '', string $version = null): bool
 		{
 			$docroot = $this->getDocumentRoot($hostname, $path);
+			parent::setInfo($docroot, [
+				'failed' => true
+			]);
 			if (!$docroot) {
 				return error('update failed');
 			}
 			$approot = $this->getAppRoot($hostname, $path);
 			$oldversion = $this->get_version($hostname, $path) ?? $version;
-			$pkg = $this->lumenSubtype($approot) ? 'laravel/lumen-framework' : 'laravel/framework';
-			$cmd = 'update ' . $pkg . ($version ? ':' . $version : '');
+
+			$metadata = ComposerMetadata::read($ctx = $this->getAuthContextFromDocroot($approot), $approot);
+			array_set($metadata, 'require.' . $this->updateLibraryName($approot), $version ?: '*');
+			$metadata->sync();
+
+			$cmd = 'update --no-plugins -a -W ';
 			$ret = $this->execComposer($approot, $cmd);
-			$error = [$ret['stderr']];
-			if ($version && $oldversion !== $version && $ret['success']) {
-				$ret['success'] = false;
-				$error = [
-					"Failed to update Laravel from `%s' to `%s', check composer.json for version restrictions",
-					$oldversion, $version
-				];
+			if ($version && $oldversion === $version || !$ret['success']) {
+				return error("Failed to update %(name)s from `%(old)s' to `%(new)s', check composer.json for version restrictions",
+					['name' => static::APP_NAME, 'old' => $oldversion, 'new' => $version]
+				);
 			}
+
+			// update composer.json versioning after update
+			defer($_, fn() => array_set(
+				$metadata,
+				"require.{$this->updateLibraryName($approot)}",
+				$this->parseLock($this->get_reconfigurable($hostname, $path, 'verlock'), $version)
+			));
+
+			$this->postUpdate($hostname, $path);
 			parent::setInfo($docroot, [
 				'version' => $oldversion,
 				'failed'  => !$ret['success']
 			]);
 
-			return $ret['success'] ?: error(...$error);
+			return $ret['success'] ?: error($ret['stderr']);
+		}
+
+		protected function postUpdate(string $hostname, string $path): bool
+		{
+			$approot = $this->getAppRoot($hostname, $path);
+			$version = $this->get_version($hostname, $path);
+			$commands = [
+				'migrate',
+				\Opcenter\Versioning::compare($version, '9',
+					'>=') ? 'vendor:publish --tag=laravel-assets --no-ansi' : null,
+			];
+			foreach ($commands as $cmd) {
+				if (!$cmd) {
+					continue;
+				}
+				$this->execPhp($approot, './' . static::BINARY_NAME . ' ' . $cmd);
+			}
+
+			return true;
+		}
+
+		protected function updateLibraryName(string $approot): string
+		{
+			return $this->lumenSubtype($approot) ? 'laravel/lumen-framework' : 'laravel/framework';
 		}
 
 		protected function execComposer(string $path = null, string $cmd, array $args = array()): array
