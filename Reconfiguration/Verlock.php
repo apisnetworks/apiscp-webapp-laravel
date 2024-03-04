@@ -15,10 +15,11 @@
 
 	use Module\Support\Webapps\App\Type\Unknown\Reconfiguration\Verlock as VerlockParent;
 	use Module\Support\Webapps\ComposerMetadata;
+	use Module\Support\Webapps\Contracts\DeferredReconfiguration;
 	use Module\Support\Webapps\Traits\WebappUtilities;
 	use Opcenter\Versioning;
 
-	class Verlock extends VerlockParent
+	class Verlock extends VerlockParent implements DeferredReconfiguration
 	{
 		// package to update directly in composer.json
 		const PACKAGE_NAME = 'laravel/framework';
@@ -27,20 +28,11 @@
 
 		public function handle(&$val): bool
 		{
-			if (!parent::handle($val)) {
-				return false;
-			}
-
-			$this->callback(fn() => $this->apply($val));
-			return true;
+			return parent::handle($val);
 		}
 
-		protected function apply(&$val): bool
+		public function apply(mixed &$val): bool
 		{
-			if ($this->app->isInstalling()) {
-				// app has failed to install or in incomplete state
-				return true;
-			}
 			$metadata = ComposerMetadata::read(
 				$this->getAuthContextFromDocroot($this->app->getAppRoot()),
 				$this->app->getAppRoot()

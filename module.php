@@ -385,7 +385,7 @@
 			}
 
 			if ($this->lumenSubtype($approot)) {
-				$meta = array_first(ComposerMetadata::readFrozen($this->getAuthContextFromDocroot($approot))->packages(), function ($package) {
+				$meta = array_first(ComposerMetadata::readFrozen($this->getAuthContextFromDocroot($approot), $approot)->packages(), function ($package) {
 					return $package['name'] === 'laravel/lumen-framework';
 				});
 				return $meta ? substr($meta['version'], 1) : null;
