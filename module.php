@@ -541,7 +541,7 @@
 			defer($_, fn() => array_set(
 				$metadata,
 				"require.{$this->updateLibraryName($approot)}",
-				$this->parseLock($this->get_reconfigurable($hostname, $path, 'verlock'), $version)
+				$this->parseLock($this->get_reconfigurable($hostname, $path, 'verlock'), $version ?? $this->get_version($hostname, $path))
 			));
 
 			$this->postUpdate($hostname, $path);
