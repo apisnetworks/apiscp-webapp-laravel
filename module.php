@@ -67,24 +67,13 @@
 				]);
 			}
 
-			if (!$this->php_composer_exists()) {
-				return error('composer missing! contact sysadmin');
-			}
-
-			// Same situation as with Ghost. We can't install under a path for fear of
-			// leaking information
-			if ($path) {
-				return error('Composer projects may only be installed directly on a subdomain or domain without a child path, e.g. https://domain.com but not https://domain.com/laravel');
-			}
-
-			if (!($docroot = $this->getDocumentRoot($hostname, $path))) {
-				return error("failed to normalize path for `%s'", $hostname);
-			}
-
 			if (!$this->parseInstallOptions($opts, $hostname, $path)) {
 				return false;
 			}
 
+			$docroot = $this->getDocumentRoot($hostname, $path);
+
+			// uninstall may relink public/
 			$args['version'] = $opts['version'];
 
 			if (!$this->createProject($docroot, static::PACKAGIST_NAME, $opts['version'])) {
