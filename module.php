@@ -166,18 +166,14 @@
 			// Laravel bootstraps itself with laravel/laravel (laravel/framework main versioning)
 			// Flarum with flarum/flarum (flarum/core main versioning)
 			// Make a risky assumption the installation will always reflect the framework version
-			foreach ($this->getPackagistVersions(static::PACKAGIST_NAME) as $branchVer) {
-				if (version_compare($branchVer, \Opcenter\Versioning::asMinor($version), '>=')) {
-					break;
-				}
-			}
+			$installerVer = $this->latestMatchingPackage($this->updateLibraryName($docroot), $version, $package);
 			$opts = \Opcenter\CliParser::buildFlags($opts + ['prefer-dist' => true, 'no-install' => true, 'no-scripts' => true]);
 			$ret = $this->execComposer($docroot,
 				'create-project ' . $opts . ' %(package)s %(docroot)s \'%(version)s\'',
 				[
 					'package' => $package,
 					'docroot' => $docroot,
-					'version' => $branchVer
+					'version' => $installerVer
 				]
 			);
 			$metadata = ComposerMetadata::read($ctx = $this->getAuthContextFromDocroot($docroot), $docroot);
