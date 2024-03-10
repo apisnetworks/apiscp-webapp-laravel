@@ -98,7 +98,7 @@
 				// handle the xn-- in punycode domains
 				$composerHostname = preg_replace("/-{2,}/", '-', $hostname);
 				$this->execComposer($approot, 'config name %(hostname)s/%(app)s', [
-					'app' => strtolower(static::APP_NAME),
+					'app' => $this->getInternalName(),
 					'hostname' => $composerHostname
 				]);
 				$docroot = $this->getDocumentRoot($hostname, $path);
@@ -109,7 +109,9 @@
 					$this->_fixCache($approot);
 				}
 
-				$db = \Module\Support\Webapps\DatabaseGenerator::mysql($this->getAuthContext(), $hostname);
+
+				$db = $this->generateDatabaseStorage($hostname, $path);
+
 				if (!$db->create()) {
 					return false;
 				}
@@ -159,6 +161,10 @@
 
 			return info('%(app)s installed - confirmation email with login info sent to %(email)s',
 				['app' => static::APP_NAME, 'email' => $opts['email']]);
+		}
+
+		protected function generateDatabaseStorage(string $hostname, string $path = ''): \Module\Support\Webapps\DatabaseGenerator {
+			return \Module\Support\Webapps\DatabaseGenerator::mysql($this->getAuthContext(), $hostname);
 		}
 
 		protected function createProject(string $docroot, string $package, string $version, array $opts = []): bool
@@ -446,16 +452,18 @@
 				return error('failed to determine %(app)s', ['app' => $this->getAppName()]);
 			}
 			if (!$this->file_exists($approot . '/bootstrap/cache/config.php')) {
-				if ($this->lumenSubtype($approot) && $this->file_file_exists($approot . '/.env')) {
+				if ($this->file_exists($approot . '/.env')) {
 
-					$ini = parse_ini_string($this->file_get_file_contents($approot . '/.env'));
+					// barfs if value contains unquoted '='
+					$ini = parse_ini_string($this->file_get_file_contents($approot . '/.env'), false, INI_SCANNER_RAW);
 					return [
 						'host'     => $ini['DB_HOST'] ?? 'localhost',
 						'prefix'   => $ini['DB_PREFIX'] ?? '',
 						'user'     => $ini['DB_USERNAME'] ?? $this->username,
 						'password' => $ini['DB_PASSWORD'] ?? '',
 						'db'       => $ini['DB_DATABASE'] ?? null,
-						'type'     => $ini['DB_CONNECTION'] ?? 'mysql'
+						'type'     => $ini['DB_CONNECTION'] ?? 'mysql',
+						'port'     => ((int)$ini['DB_PORT'] ?? 0) ?: null
 					];
 				}
 				if (!$this->php_jailed()) {
@@ -478,7 +486,7 @@
 			$ret = $this->pman_run($cmd, array('path' => $approot, 'code' => $code));
 
 			if (!$ret['success']) {
-				return error("failed to obtain Laravel configuration for `%s'", $approot);
+				return error("failed to obtain %(app)s configuration for `%(approot)s'", ['app' => static::APP_NAME, 'approot' => $approot]);
 			}
 			$data = \Util_PHP::unserialize($ret['stdout']);
 
