@@ -246,6 +246,8 @@
 				$cap = '5.5';
 			} else if (version_compare($phpversion, '8.0', '<')) {
 				$cap = '8';
+			} else if (version_compare($phpversion, '8.2', '<')) {
+				$cap = '10';
 			}
 
 			if ($cap && version_compare($options['version'], $cap, '>=')) {
