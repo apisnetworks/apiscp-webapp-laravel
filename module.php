@@ -14,6 +14,7 @@
 	use Module\Support\Webapps\Composer;
 	use Module\Support\Webapps\ComposerMetadata;
 	use Module\Support\Webapps\ComposerWrapper;
+	use Module\Support\Webapps\Messages;
 	use Module\Support\Webapps\Traits\PublicRelocatable;
 
 	/**
@@ -58,11 +59,11 @@
 		public function install(string $hostname, string $path = '', array $opts = array()): bool
 		{
 			if (!$this->mysql_enabled()) {
-				return error('%(what)s must be enabled to install %(app)s',
+				return error(Messages::ERR_INSTALL_MISSING_PREREQ,
 					['what' => 'MySQL', 'app' => static::APP_NAME]);
 			}
 			if (!version_compare($this->php_version(), '7', '>=')) {
-				return error('%(name)s requires %(what)s', [
+				return error(Messages::ERR_INSTALL_MISSING_PREREQ, [
 					'name' => static::APP_NAME, 'what' => 'PHP7'
 				]);
 			}
@@ -250,7 +251,7 @@
 				$cap = '10';
 			}
 
-			if ($cap && version_compare($options['version'], $cap, '>=')) {
+			if ($cap && Opcenter\Versioning::compare($options['version'], $cap, '>')) {
 				info("PHP version `%(phpversion)s' detected, capping %(name)s to %(cap)s", [
 					'phpversion' => $phpversion, 'name' => static::APP_NAME, 'cap' => $cap
 				]);
