@@ -11,11 +11,13 @@
 	 *  +------------------------------------------------------------+
 	 */
 
+	use Module\Support\Webapps\App\Type\Laravel\Messages as LaravelMessages;
 	use Module\Support\Webapps\Composer;
 	use Module\Support\Webapps\ComposerMetadata;
 	use Module\Support\Webapps\ComposerWrapper;
 	use Module\Support\Webapps\Messages;
 	use Module\Support\Webapps\Traits\PublicRelocatable;
+	use Opcenter\Provisioning\ConfigurationWriter;
 
 	/**
 	 * Laravel management
@@ -88,7 +90,7 @@
 			if (null === ($docroot = $this->remapPublic($hostname, $path))) {
 				$this->file_delete($this->getDocumentRoot($hostname, $path), true);
 
-				return error("Failed to remap %(name)s to public/, manually remap from `%(path)s' - %(name)s setup is incomplete!",
+				return error(Messages::ERR_PATH_REMAP_FAILED,
 					['name' => static::APP_NAME, 'path' => $docroot]);
 			}
 
@@ -132,7 +134,7 @@
 					'login'      => $opts['login'] ?? $opts['user'],
 					'password'   => $opts['password'] ?? ''
 				], $args))) {
-					return error('failed to set database configuration');
+					return error(Messages::ERR_DATABASE_CONFIGURATION_FAILED);
 				}
 
 			} catch (\apnscpException $e) {
@@ -143,7 +145,7 @@
 						$db->rollback();
 					}
 				}
-				return error('Failed to install %(name)s: %(err)s', [
+				return error(Messages::ERR_APP_INSTALL_FAILED, [
 					'name' => static::APP_NAME, 'err' => $e->getMessage()
 				]);
 			} finally {
@@ -160,7 +162,7 @@
 
 			$this->notifyInstalled($hostname, $path, $opts);
 
-			return info('%(app)s installed - confirmation email with login info sent to %(email)s',
+			return info(Messages::MSG_CHECKPOINT_APP_INSTALLED,
 				['app' => static::APP_NAME, 'email' => $opts['email']]);
 		}
 
@@ -190,8 +192,8 @@
 				'update -W');
 
 			return $ret['success'] ?:
-				error('failed to download %(name)s package: %(stderr)s %(stdout)s', [
-					'name' => static::APP_NAME, 'stderr' => $ret['stderr'], 'stdout' => $ret['stdout']
+				error(Messages::ERR_APP_DOWNLOAD_FAILED_STD, [
+					'name' => static::APP_NAME, 'version' => $version, 'stderr' => $ret['stderr'], 'stdout' => $ret['stdout']
 				]
 			);
 		}
@@ -252,8 +254,8 @@
 			}
 
 			if ($cap && Opcenter\Versioning::compare($options['version'], $cap, '>')) {
-				info("PHP version `%(phpversion)s' detected, capping %(name)s to %(cap)s", [
-					'phpversion' => $phpversion, 'name' => static::APP_NAME, 'cap' => $cap
+				info(Messages::MSG_VERSION_CAP_APPLIED, [
+					'what' => 'PHP', 'version' => $phpversion, 'name' => static::APP_NAME, 'cap' => $cap
 				]);
 				$options['version'] = $cap;
 			}
@@ -273,7 +275,7 @@
 			$tmpfile = tempnam($this->domain_fs_path() . '/tmp', 'appwrapper');
 			chmod($tmpfile, 0644);
 			if (!copy(resource_path('storehouse/laravel/ApplicationWrapper.php'), $tmpfile)) {
-				return warn('failed to copy optimized cache bootstrap');
+				return warn(LaravelMessages::FAILED_TO_COPY_OPTIMIZED_CACHE_BOOTSTRAP);
 			}
 			if (!posix_getuid()) {
 				chown($tmpfile, File_Module::UPLOAD_UID);
@@ -285,7 +287,7 @@
 
 			$file = dirname(dirname($file)) . '/bootstrap/app.php';
 			if (!file_exists($file)) {
-				return error('unable to alter app.php - file is missing (Laravel corrupted?)');
+				return error(Messages::ERR_UNABLE_TO_MODIFY_APP_FILE, ['file' => $file, 'app' => static::APP_NAME]);
 			}
 			$contents = file_get_contents($file);
 			$contents = preg_replace('/new\sIlluminate\\\\Foundation\\\\Application/m', 'new App\\ApplicationWrapper',
@@ -300,7 +302,7 @@
 
 		protected function setConfiguration(string $approot, string $docroot, array $config)
 		{
-			$envcfg = (new \Opcenter\Provisioning\ConfigurationWriter('@webapp(' . $this->getAppName() . ')::templates.env',
+			$envcfg = (new ConfigurationWriter('@webapp(' . $this->getAppName() . ')::templates.env',
 				\Opcenter\SiteConfiguration::shallow($this->getAuthContext())))
 				->compile($config);
 			$this->file_put_file_contents("${approot}/.env", (string)$envcfg);
@@ -323,14 +325,14 @@
 
 			$ret = $this->execPhp($approot, static::BINARY_NAME . ' config:cache');
 			if (!$ret['success']) {
-				return error('config rebuild failed: %s', coalesce($ret['stderr'], $ret['stdout']));
+				return error(LaravelMessages::CONFIG_REBUILD_FAILED, coalesce($ret['stderr'], $ret['stdout']));
 			}
 			if (!$this->php_jailed()) {
 				return true;
 			}
 
 			if (!($uri = $this->web_get_hostname_from_docroot($docroot))) {
-				return error("no URI specified, cannot deduce URI from docroot `%s'", $docroot);
+				return error(Messages::ERR_HOSTNAME_FROM_DOCROOT, $docroot);
 			}
 			$uri = $this->web_normalize_hostname($uri);
 			$ctx = stream_context_create(array(
@@ -347,7 +349,7 @@
 			));
 
 			return (bool)@get_headers('http://' . $this->site_ip_address(), 0, $ctx) ?:
-				warn("failed to cache configuration directly, visit `%s' to cache configuration", $uri);
+				warn(LaravelMessages::CACHE_REQUEST_FAILED, $uri);
 		}
 
 		protected function lumenSubtype(string $appRoot): bool
@@ -452,7 +454,7 @@
 			$this->web_purge();
 			$approot = $this->getAppRoot($hostname, $path);
 			if (!$approot) {
-				return error('failed to determine %(app)s', ['app' => $this->getAppName()]);
+				return error(Messages::ERR_DETECTION_ASSERTION_FAILED, ['hostname' => $hostname, 'path' => $path, 'app' => $this->getAppName()]);
 			}
 			if (!$this->file_exists($approot . '/bootstrap/cache/config.php')) {
 				if ($this->file_exists($approot . '/.env')) {
@@ -471,7 +473,7 @@
 				}
 				if (!$this->php_jailed()) {
 					// prime it
-					warn('Cache not found, priming with request');
+					warn(LaravelMessages::CACHE_NOT_FOUND_PRIMING_WITH_REQUEST);
 					try {
 						(new \HTTP\SelfReferential($hostname, $this->site_ip_address()))->get($path);
 					} catch (\GuzzleHttp\Exception\RequestException $e) {
@@ -489,7 +491,7 @@
 			$ret = $this->pman_run($cmd, array('path' => $approot, 'code' => $code));
 
 			if (!$ret['success']) {
-				return error("failed to obtain %(app)s configuration for `%(approot)s'", ['app' => static::APP_NAME, 'approot' => $approot]);
+				return error(Messages::ERR_WEBAPP_DATABASE_APPROOT_FETCH_FAILED, ['app' => static::APP_NAME, 'approot' => $approot]);
 			}
 			$data = \Util_PHP::unserialize($ret['stdout']);
 
@@ -498,7 +500,7 @@
 
 		public function update_all(string $hostname, string $path = '', string $version = null): bool
 		{
-			return $this->update($hostname, $path, $version) || error('failed to update all components');
+			return $this->update($hostname, $path, $version) || error(Messages::ERR_ALL_COMPONENTS_FAILED_UPDATE);
 		}
 
 		/**
@@ -528,7 +530,8 @@
 			$cmd = 'update --no-plugins -a -W ';
 			$ret = $this->execComposer($approot, $cmd);
 			if ($version && $oldversion === $version || !$ret['success']) {
-				return error("Failed to update %(name)s from `%(old)s' to `%(new)s', check composer.json for version restrictions",
+				// @TODO add Composer output
+				return error(Messages::ERR_UPDATE_FAILED,
 					['name' => static::APP_NAME, 'old' => $oldversion, 'new' => $version]
 				);
 			}
