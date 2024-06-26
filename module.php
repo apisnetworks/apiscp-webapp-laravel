@@ -112,7 +112,6 @@
 					$this->_fixCache($approot);
 				}
 
-
 				$db = $this->generateDatabaseStorage($hostname, $path);
 
 				if (!$db->create()) {
@@ -154,8 +153,6 @@
 
 			$this->postInstall($hostname, $path);
 
-			$this->initializeMeta($docroot, $opts);
-			$this->fortify($hostname, $path, $this->handlerFromApplication($this->getAppName())::DEFAULT_FORTIFICATION);
 			$this->fixRewriteBase($docroot);
 
 			$this->buildConfig($approot, $docroot);
@@ -228,11 +225,11 @@
 		protected function checkVersion(array &$options): bool
 		{
 			if (self::class !== static::class) {
-				return parent::checkVersion($options);
+				parent::checkVersion($options);
 			}
 
+			$versions = $this->get_installable_versions();
 			if (!isset($options['version'])) {
-				$versions = $this->get_installable_versions();
 				$options['version'] = array_pop($versions);
 			}
 			if (!parent::checkVersion($options)) {
@@ -257,7 +254,7 @@
 				info(Messages::MSG_VERSION_CAP_APPLIED, [
 					'what' => 'PHP', 'version' => $phpversion, 'name' => static::APP_NAME, 'cap' => $cap
 				]);
-				$options['version'] = $cap;
+				$options['version'] = \Opcenter\Versioning::maxVersion($versions, $cap);
 			}
 
 			return true;
