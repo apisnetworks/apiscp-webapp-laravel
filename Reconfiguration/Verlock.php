@@ -43,6 +43,10 @@
 					['file' => 'composer.json', 'app' => $this->app->getName()]);
 			}
 
+			if (!$this->app->getVersion()) {
+				return false;
+			}
+
 			array_set(
 				$metadata,
 				'require.' . $this->getPackageName(),

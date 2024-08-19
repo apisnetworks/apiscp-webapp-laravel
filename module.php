@@ -190,7 +190,7 @@
 
 			return $ret['success'] ?:
 				error(Messages::ERR_APP_DOWNLOAD_FAILED_STD, [
-					'name' => static::APP_NAME, 'version' => $version, 'stderr' => $ret['stderr'], 'stdout' => $ret['stdout']
+					'app' => static::APP_NAME, 'version' => $version, 'stderr' => $ret['stderr'], 'stdout' => $ret['stdout']
 				]
 			);
 		}
@@ -436,6 +436,10 @@
 		 */
 		public function get_installable_versions(): array
 		{
+			if (self::class === static::class) {
+				return parent::getPackagistVersions('laravel/framework');
+			}
+
 			return parent::getPackagistVersions(static::PACKAGIST_NAME);
 		}
 
