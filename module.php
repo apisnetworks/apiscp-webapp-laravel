@@ -80,16 +80,11 @@
 			$args['version'] = $opts['version'];
 
 			if (!$this->createProject($docroot, static::PACKAGIST_NAME, $opts['version'])) {
-				if (empty($opts['keep'])) {
-					$this->file_delete($docroot, true);
-				}
-
 				return false;
 			}
 
 			if (null === ($docroot = $this->remapPublic($hostname, $path))) {
 				$this->file_delete($this->getDocumentRoot($hostname, $path), true);
-
 				return error(Messages::ERR_PATH_REMAP_FAILED,
 					['name' => static::APP_NAME, 'path' => $docroot]);
 			}
@@ -117,7 +112,6 @@
 				if (!$db->create()) {
 					return false;
 				}
-
 				$fqdn = $this->web_normalize_hostname($hostname);
 				$args['uri'] = rtrim($fqdn . '/' . $path, '/');
 				$args['proto'] = empty($opts['ssl']) ? 'http://' : 'https://';
@@ -137,12 +131,8 @@
 				}
 
 			} catch (\apnscpException $e) {
-				if (empty($opts['keep'])) {
-					$this->remapPublic($hostname, $path, '');
-					$this->file_delete($approot, true);
-					if (isset($db)) {
-						$db->rollback();
-					}
+				if (empty($opts['keep']) && isset($db)) {
+					$db->rollback();
 				}
 				return error(Messages::ERR_APP_INSTALL_FAILED, [
 					'name' => static::APP_NAME, 'err' => $e->getMessage()
