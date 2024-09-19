@@ -66,7 +66,7 @@
 			}
 			if (!version_compare($this->php_version(), '7', '>=')) {
 				return error(Messages::ERR_INSTALL_MISSING_PREREQ, [
-					'name' => static::APP_NAME, 'what' => 'PHP7'
+					'app' => static::APP_NAME, 'what' => 'PHP7'
 				]);
 			}
 
