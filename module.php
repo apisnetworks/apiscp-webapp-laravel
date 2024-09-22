@@ -214,16 +214,14 @@
 
 		protected function checkVersion(array &$options): bool
 		{
-			if (self::class !== static::class) {
-				parent::checkVersion($options);
-			}
-
 			$versions = $this->get_installable_versions();
 			if (!isset($options['version'])) {
 				$options['version'] = array_pop($versions);
 			}
 			if (!parent::checkVersion($options)) {
 				return false;
+			} else if (self::class !== static::class) {
+				return true;
 			}
 			$phpversion = $this->php_pool_get_version();
 
