@@ -86,7 +86,7 @@
 			if (null === ($docroot = $this->remapPublic($hostname, $path))) {
 				$this->file_delete($this->getDocumentRoot($hostname, $path), true);
 				return error(Messages::ERR_PATH_REMAP_FAILED,
-					['name' => static::APP_NAME, 'path' => $docroot]);
+					['app' => static::APP_NAME, 'path' => $docroot, 'public' => static::RELOCATED_DOCROOT_NAME]);
 			}
 
 			$oldex = \Error_Reporter::exception_upgrade();
@@ -135,7 +135,7 @@
 					$db->rollback();
 				}
 				return error(Messages::ERR_APP_INSTALL_FAILED, [
-					'name' => static::APP_NAME, 'err' => $e->getMessage()
+					'app' => static::APP_NAME, 'err' => $e->getMessage()
 				]);
 			} finally {
 				\Error_Reporter::exception_upgrade($oldex);
@@ -240,7 +240,7 @@
 
 			if ($cap && Opcenter\Versioning::compare($options['version'], $cap, '>')) {
 				info(Messages::MSG_VERSION_CAP_APPLIED, [
-					'what' => 'PHP', 'version' => $phpversion, 'name' => static::APP_NAME, 'cap' => $cap
+					'what' => 'PHP', 'version' => $phpversion, 'app' => static::APP_NAME, 'cap' => $cap
 				]);
 				$options['version'] = \Opcenter\Versioning::maxVersion($versions, $cap);
 			}
@@ -428,7 +428,7 @@
 				return parent::getPackagistVersions('laravel/framework');
 			}
 
-			return parent::getPackagistVersions(static::PACKAGIST_NAME);
+			return $this->get_versions();
 		}
 
 		/**
@@ -521,7 +521,7 @@
 			if ($version && $oldversion === $version || !$ret['success']) {
 				// @TODO add Composer output
 				return error(Messages::ERR_UPDATE_FAILED,
-					['name' => static::APP_NAME, 'old' => $oldversion, 'new' => $version]
+					['app' => static::APP_NAME, 'old' => $oldversion, 'new' => $version]
 				);
 			}
 
