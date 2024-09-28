@@ -290,7 +290,7 @@
 			$envcfg = (new ConfigurationWriter('@webapp(' . $this->getAppName() . ')::templates.env',
 				\Opcenter\SiteConfiguration::shallow($this->getAuthContext())))
 				->compile($config);
-			$this->file_put_file_contents("${approot}/.env", (string)$envcfg);
+			$this->file_put_file_contents("{$approot}/.env", (string)$envcfg);
 
 			return $this->buildConfig($approot, $docroot);
 		}
@@ -327,7 +327,7 @@
 						'method'           => 'HEAD',
 						'header'           => [
 							'User-agent: ' . PANEL_BRAND . ' Internal check',
-							"Host: ${uri}"
+							"Host: {$uri}"
 						],
 						'protocol_version' => '1.1'
 					)
