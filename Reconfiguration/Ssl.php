@@ -17,6 +17,7 @@ use Module\Support\Webapps\App\Type\Unknown\Reconfiguration\Ssl as SslParent;
 use Module\Support\Webapps\Contracts\DeferredReconfiguration;
 use Module\Support\Webapps\PhpWrapper;
 use Module\Support\Webapps\Traits\WebappUtilities;
+use Opcenter\Map;
 
 class Ssl extends SslParent implements DeferredReconfiguration
 {
@@ -29,9 +30,15 @@ class Ssl extends SslParent implements DeferredReconfiguration
 			return debug("No %(file)s located in `%(dir)s'", ['file' => '.env', 'dir' => $approot]);
 		}
 
-		$contents = parse_ini_string($this->file_get_file_contents($path), false, INI_SCANNER_RAW);
-		$contents['APP_URL'] = ($val ? 'https://' : 'http://') . $this->app->getHostname();
-		if (!$this->file_put_file_contents($path, \Util_Conf::build_ini($contents))) {
+		// required for dotenv-compatible quoting
+		$contents = $this->file_get_file_contents($path);
+		$fp = tmpfile();
+		fwrite($fp, $contents);
+		$map = Map::write(stream_get_meta_data($fp)['uri'], 'inifile')->quoted(true)->section(null);
+		$map['APP_URL'] = ($val ? 'https://' : 'http://') . $this->app->getHostname();
+		$map->close();
+		rewind($fp);
+		if (!$this->file_put_file_contents($path, stream_get_contents($fp))) {
 			return false;
 		}
 
