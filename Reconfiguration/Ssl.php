@@ -32,13 +32,11 @@ class Ssl extends SslParent implements DeferredReconfiguration
 
 		// required for dotenv-compatible quoting
 		$contents = $this->file_get_file_contents($path);
-		$fp = tmpfile();
-		fwrite($fp, $contents);
-		$map = Map::write(stream_get_meta_data($fp)['uri'], 'inifile')->quoted(true)->section(null);
+		$map = Map\Inifile::fromString($contents)->quoted(true)->section(null);
+
 		$map['APP_URL'] = ($val ? 'https://' : 'http://') . $this->app->getHostname();
 		$map->close();
-		rewind($fp);
-		if (!$this->file_put_file_contents($path, stream_get_contents($fp))) {
+		if (!$this->file_put_file_contents($path, (string)$map)) {
 			return false;
 		}
 
