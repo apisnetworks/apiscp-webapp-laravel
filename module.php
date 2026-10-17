@@ -236,6 +236,8 @@
 				$cap = '8';
 			} else if (version_compare($phpversion, '8.2', '<')) {
 				$cap = '10';
+			} else if (version_compare($phpversion, '8.3', '<')) {
+				$cap = '12';
 			}
 
 			if ($cap && Opcenter\Versioning::compare($options['version'], $cap, '>')) {
